@@ -45,6 +45,11 @@ suspend fun CurrentIntelliJThemeDefinition(): IntelliJThemeDefinition {
         foregroundDisabled = retrieveColorOrUnspecified("Label.disabledForeground")
     )
 
+    val dropdownPalette = IntelliJPalette.Dropdown(
+        background = retrieveColorOrUnspecified("ComboBox.background"),
+        foreground = retrieveColorOrUnspecified("ComboBox.foreground"),
+    )
+
     val palette = IntelliJPalette(
         button = buttonPalette,
         background = retrieveColorOrUnspecified("Panel.background"),
@@ -69,6 +74,7 @@ suspend fun CurrentIntelliJThemeDefinition(): IntelliJThemeDefinition {
             foregroundDisabled = retrieveColorOrUnspecified("RadioButton.disabledText")
         ),
         textField = textFieldPalette,
+        dropdown = dropdownPalette,
         separator = IntelliJPalette.Separator(
             color = retrieveColorOrUnspecified("Separator.foreground"),
             background = retrieveColorOrUnspecified("Separator.background")

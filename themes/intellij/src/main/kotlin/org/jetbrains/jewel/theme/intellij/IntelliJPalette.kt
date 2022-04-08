@@ -9,6 +9,7 @@ data class IntelliJPalette(
     val checkbox: Checkbox,
     val radioButton: RadioButton,
     val textField: TextField,
+    val dropdown: Dropdown,
     val separator: Separator,
     val treeView: TreeView,
 
@@ -63,6 +64,13 @@ data class IntelliJPalette(
         val foregroundDisabled: Color
     ) {
 
+        companion object
+    }
+
+    data class Dropdown(
+        val background: Color, // ComboBox.background
+        val foreground: Color, // ComboBox.foreground
+    ) {
         companion object
     }
 
