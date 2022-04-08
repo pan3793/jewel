@@ -48,6 +48,8 @@ suspend fun CurrentIntelliJThemeDefinition(): IntelliJThemeDefinition {
     val dropdownPalette = IntelliJPalette.Dropdown(
         background = retrieveColorOrUnspecified("ComboBox.background"),
         foreground = retrieveColorOrUnspecified("ComboBox.foreground"),
+        selectionBackground = retrieveColorOrUnspecified("ComboBox.selectionBackground"),
+        selectionForeground = retrieveColorOrUnspecified("Combobox.selectionForeground")
     )
 
     val palette = IntelliJPalette(

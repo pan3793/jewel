@@ -134,6 +134,22 @@ val IntelliJPalette.Tab.Companion.darcula
         tabSelectionHeight = 3.dp
     )
 
+val IntelliJPalette.Dropdown.Companion.light
+    get() = IntelliJPalette.Dropdown(
+        background = Color(0xFFFFFFFF),
+        foreground = Color(0xFF000000),
+        selectionBackground = Color(0xFF2675BF),
+        selectionForeground = Color(0xFFFFFFFF),
+    )
+
+val IntelliJPalette.Dropdown.Companion.darcula
+    get() = IntelliJPalette.Dropdown(
+        background = Color(0xFF3C3F41),
+        foreground = Color(0xFFBBBBBB),
+        selectionBackground = Color(0xFF2F65CA),
+        selectionForeground = Color(0xFFBBBBBB),
+    )
+
 val IntelliJPalette.Companion.light
     get() = IntelliJPalette(
         button = IntelliJPalette.Button.light,
@@ -155,6 +171,7 @@ val IntelliJPalette.Companion.light
         scrollbar = IntelliJPalette.Scrollbar.light,
         treeView = IntelliJPalette.TreeView.Companion.light,
         tab = IntelliJPalette.Tab.light,
+        dropdown = IntelliJPalette.Dropdown.light,
     )
 
 val IntelliJPalette.Companion.darcula
@@ -178,6 +195,7 @@ val IntelliJPalette.Companion.darcula
         scrollbar = IntelliJPalette.Scrollbar.darcula,
         treeView = IntelliJPalette.TreeView.darcula,
         tab = IntelliJPalette.Tab.darcula,
+        dropdown = IntelliJPalette.Dropdown.darcula,
     )
 
 val IntelliJPalette.TreeView.Companion.light

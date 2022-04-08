@@ -70,6 +70,8 @@ data class IntelliJPalette(
     data class Dropdown(
         val background: Color, // ComboBox.background
         val foreground: Color, // ComboBox.foreground
+        val selectionBackground: Color, // ComboBox.selectionBackground
+        val selectionForeground: Color, // ComboBox.selectionForeground
     ) {
         companion object
     }
