@@ -157,6 +157,9 @@ suspend fun CurrentIntelliJThemeDefinition(): IntelliJThemeDefinition {
         ),
         treeView = IntelliJPainters.TreeViewPainters(
             arrow = { rememberSvgResource("general/chevron-right.svg", AllIcons::class.java.classLoader) }
+        ),
+        dropdown = IntelliJPainters.DropdownPainters(
+            arrow = { rememberSvgResource("general/arrowDown.svg", AllIcons::class.java.classLoader) }
         )
     )
     val typography = IntelliJTypography(

@@ -6,14 +6,16 @@ val IntelliJPainters.Companion.light
     get() = IntelliJPainters(
         checkbox = IntelliJPainters.CheckboxPainters.light,
         radioButton = IntelliJPainters.RadioButtonPainters.light,
-        treeView = IntelliJPainters.TreeViewPainters.light
+        treeView = IntelliJPainters.TreeViewPainters.light,
+        dropdown = IntelliJPainters.DropdownPainters.light
     )
 
 val IntelliJPainters.Companion.darcula
     get() = IntelliJPainters(
         checkbox = IntelliJPainters.CheckboxPainters.darcula,
         radioButton = IntelliJPainters.RadioButtonPainters.darcula,
-        treeView = IntelliJPainters.TreeViewPainters.darcula
+        treeView = IntelliJPainters.TreeViewPainters.darcula,
+        dropdown = IntelliJPainters.DropdownPainters.darcula
     )
 
 val IntelliJPainters.CheckboxPainters.Companion.light
@@ -70,4 +72,14 @@ val IntelliJPainters.TreeViewPainters.Companion.light
 val IntelliJPainters.TreeViewPainters.Companion.darcula
     get() = IntelliJPainters.TreeViewPainters(
         arrow = { painterResource("darcula/chevron-right.svg") }
+    )
+
+val IntelliJPainters.DropdownPainters.Companion.light
+    get() = IntelliJPainters.DropdownPainters(
+        arrow = { painterResource("intellij/arrowDown.svg") }
+    )
+
+val IntelliJPainters.DropdownPainters.Companion.darcula
+    get() = IntelliJPainters.DropdownPainters(
+        arrow = { painterResource("darcula/arrowDown.svg") }
     )
