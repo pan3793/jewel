@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,8 +62,10 @@ import org.jetbrains.jewel.theme.intellij.components.TabRow
 import org.jetbrains.jewel.theme.intellij.components.Text
 import org.jetbrains.jewel.theme.intellij.components.TextField
 import org.jetbrains.jewel.theme.intellij.components.Tree
-import org.jetbrains.jewel.theme.intellij.components.TreeLayout
+import org.jetbrains.jewel.theme.intellij.components.TreeView
 import org.jetbrains.jewel.theme.intellij.components.asTree
+import org.jetbrains.jewel.theme.intellij.components.rememberFocusableLazyListState
+import org.jetbrains.jewel.theme.intellij.components.rememberScrollbarAdapter
 import org.jetbrains.jewel.theme.intellij.components.rememberTabContainerState
 import org.jetbrains.jewel.theme.intellij.pxToDp
 import org.jetbrains.jewel.theme.intellij.styles.ButtonStyle
@@ -254,13 +254,13 @@ fun OutputDirectoriesLabelTree(modifier: Modifier = Modifier, outputDir: Mutable
         }
 
         Box {
-            val listState = rememberLazyListState()
-            TreeLayout(
+            val listState = rememberFocusableLazyListState()
+            TreeView(
                 modifier = Modifier.fillMaxWidth(),
                 tree = tree.value.orElse(Tree(emptyList())),
                 state = listState,
                 onTreeChanged = { tree.value = Optional.of(it) },
-                onTreeElementDoubleClick = { outputDir.value = it.data.absolutePath },
+                onLeafDoubleClick = { outputDir.value = it.data.absolutePath },
                 rowContent = {
                     val text: String = when (it) {
                         is Tree.Element.Leaf -> it.data.name

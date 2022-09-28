@@ -3,6 +3,7 @@ package org.jetbrains.jewel.theme.intellij.styles
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
@@ -16,6 +17,12 @@ import org.jetbrains.jewel.theme.intellij.IntelliJMetrics
 import org.jetbrains.jewel.theme.intellij.IntelliJPainters
 import org.jetbrains.jewel.theme.intellij.IntelliJPalette
 import org.jetbrains.jewel.theme.intellij.PainterProvider
+import org.jetbrains.jewel.theme.intellij.components.DefaultTreeViewClickModifierHandler
+import org.jetbrains.jewel.theme.intellij.components.DefaultWindowsTreeViewKeybindings
+import org.jetbrains.jewel.theme.intellij.components.TreeViewClickModifierHandler
+import org.jetbrains.jewel.theme.intellij.components.TreeViewKeybindings
+import org.jetbrains.skiko.OS
+import org.jetbrains.skiko.hostOs
 
 typealias TreeViewStyle = ControlStyle<TreeViewAppearance, TreeViewState>
 
@@ -38,6 +45,18 @@ data class TreeViewAppearance(
 )
 
 val LocalTreeViewStyle = compositionLocalOf<TreeViewStyle> { localNotProvided() }
+val LocalTreeViewClickModifierHandler: ProvidableCompositionLocal<TreeViewClickModifierHandler> =
+    compositionLocalOf { DefaultTreeViewClickModifierHandler }
+val LocalTreeKeybindings = compositionLocalOf<TreeViewKeybindings> {
+    when (hostOs) {
+        OS.Android -> TODO()
+        OS.Linux -> TODO()
+        OS.Windows -> DefaultWindowsTreeViewKeybindings
+        OS.MacOS -> TODO()
+        OS.Ios -> TODO()
+        OS.JS -> TODO()
+    }
+}
 
 val Styles.treeView: TreeViewStyle
     @Composable @ReadOnlyComposable get() = LocalTreeViewStyle.current

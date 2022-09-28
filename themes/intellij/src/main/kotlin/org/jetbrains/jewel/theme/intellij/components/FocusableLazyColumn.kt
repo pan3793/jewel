@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.onClick
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -49,22 +50,26 @@ import org.jetbrains.jewel.theme.intellij.visibleItemsRange
 import kotlin.math.max
 import kotlin.math.min
 
-class FocusableLazyListState internal constructor(internal val listState: LazyListState) : ScrollableState by listState {
+class FocusableLazyListState internal constructor(val lazyListState: LazyListState) : ScrollableState by lazyListState {
 
     suspend fun focusItem(itemIndex: Int, animateScroll: Boolean = false, scrollOffset: Int = 0) {
-        val visibleRange = listState.visibleItemsRange.drop(2).dropLast(4)
+        val visibleRange = lazyListState.visibleItemsRange.drop(2).dropLast(4)
 
         if (itemIndex !in visibleRange && visibleRange.isNotEmpty()) {
             when {
-                itemIndex < visibleRange.first() -> listState.scrollToItem(max(0, itemIndex - 2), animateScroll, scrollOffset)
+                itemIndex < visibleRange.first() -> lazyListState.scrollToItem(max(0, itemIndex - 2), animateScroll, scrollOffset)
                 itemIndex > visibleRange.last() -> {
                     val indexOfFirstVisibleElement = itemIndex - visibleRange.size
-                    listState.scrollToItem(min(listState.layoutInfo.totalItemsCount - 1, indexOfFirstVisibleElement - 1), animateScroll, scrollOffset)
+                    lazyListState.scrollToItem(
+                        min(lazyListState.layoutInfo.totalItemsCount - 1, indexOfFirstVisibleElement - 1),
+                        animateScroll,
+                        scrollOffset
+                    )
                 }
             }
         }
 
-        listState.layoutInfo.visibleItemsInfo
+        lazyListState.layoutInfo.visibleItemsInfo
             .find { it.index == itemIndex }
             ?.key
             ?.let { it as? FocusableKey }
@@ -75,37 +80,37 @@ class FocusableLazyListState internal constructor(internal val listState: LazyLi
     internal val lastFocusedIndexState: MutableState<Int?> = mutableStateOf(null)
 
     val layoutInfo: FocusableLazyListLayoutInfo
-        get() = listState.layoutInfo.asFocusable()
+        get() = lazyListState.layoutInfo.asFocusable()
 
     /** The index of the first item that is visible */
-    val firstVisibleItemIndex: Int get() = listState.firstVisibleItemIndex
+    val firstVisibleItemIndex: Int get() = lazyListState.firstVisibleItemIndex
 
     /**
      * The scroll offset of the first visible item. Scrolling forward is
      * positive - i.e., the amount that the item is offset backwards
      */
-    val firstVisibleItemScrollOffset: Int get() = listState.firstVisibleItemScrollOffset
+    val firstVisibleItemScrollOffset: Int get() = lazyListState.firstVisibleItemScrollOffset
 
     /**
      * [InteractionSource] that will be used to dispatch drag events when
      * this list is being dragged. If you want to know whether the fling (or
      * animated scroll) is in progress, use [isScrollInProgress].
      */
-    val interactionSource: InteractionSource get() = listState.interactionSource
+    val interactionSource: InteractionSource get() = lazyListState.interactionSource
 
     suspend fun scrollToItem(
         index: Int,
         scrollOffset: Int = 0
-    ) = listState.scrollToItem(index, scrollOffset)
+    ) = lazyListState.scrollToItem(index, scrollOffset)
 
     suspend fun animateScrollToItem(
         index: Int,
         scrollOffset: Int = 0
-    ) = listState.animateScrollToItem(index, scrollOffset)
+    ) = lazyListState.animateScrollToItem(index, scrollOffset)
 }
 
 private fun LazyListLayoutInfo.asFocusable() = object : FocusableLazyListLayoutInfo {
-    override val visibleItemsInfo: Sequence<FocusableLazyListItemInfo>
+    override val visibleItemsInfo: List<FocusableLazyListItemInfo>
         get() = this@asFocusable.visibleItemsInfo.asFocusable()
     override val viewportStartOffset: Int
         get() = this@asFocusable.viewportStartOffset
@@ -115,7 +120,7 @@ private fun LazyListLayoutInfo.asFocusable() = object : FocusableLazyListLayoutI
         get() = this@asFocusable.totalItemsCount
 }
 
-private fun List<LazyListItemInfo>.asFocusable(): Sequence<FocusableLazyListItemInfo> = asSequence().map {
+private fun List<LazyListItemInfo>.asFocusable(): List<FocusableLazyListItemInfo> = map {
     object : FocusableLazyListItemInfo {
         override val index: Int
             get() = it.index
@@ -141,7 +146,7 @@ interface FocusableLazyListLayoutInfo {
      * The list of [LazyListItemInfo] representing all the currently visible
      * items.
      */
-    val visibleItemsInfo: Sequence<FocusableLazyListItemInfo>
+    val visibleItemsInfo: List<FocusableLazyListItemInfo>
 
     /**
      * The start offset of the layout's viewport. You can think of it as a
@@ -205,7 +210,7 @@ fun FocusableLazyListState(
     firstVisibleItemIndex: Int = 0,
     firstVisibleItemScrollOffset: Int = 0
 ) = FocusableLazyListState(
-    listState = LazyListState(
+    lazyListState = LazyListState(
         firstVisibleItemIndex = firstVisibleItemIndex,
         firstVisibleItemScrollOffset = firstVisibleItemScrollOffset
     )
@@ -236,7 +241,7 @@ fun FocusableLazyColumn(
             .focusable()
     ) {
         LazyColumn(
-            state = state.listState,
+            state = state.lazyListState,
             contentPadding = contentPadding,
             reverseLayout = reverseLayout,
             verticalArrangement = verticalArrangement,
@@ -264,7 +269,7 @@ private fun LazyListScope.stickyHeader(
     onItemFocused: (Int) -> Unit
 ) {
     val fr = FocusRequester()
-    stickyHeader(FocusableKey(fr, entry.key)) {
+    stickyHeader(FocusableKey(fr, entry.key), entry.contentType) {
         BoxWithConstraints(
             Modifier
                 .focusRequester(fr)
@@ -282,15 +287,17 @@ private fun LazyListScope.items(
     onItemFocused: (Int) -> Unit
 ) {
     val requesters = List(entry.count) { FocusRequester() }
-    items(count = entry.count, key = { FocusableKey(requesters[it], entry.key?.invoke(it)) }) { itemIndex ->
-        BoxWithConstraints(
-            Modifier
-                .focusRequester(requesters[entry.innerIndex + itemIndex])
-                .onFocusChanged { if (it.hasFocus) onItemFocused(entry.innerIndex + itemIndex) }
-                .focusable()
-                .clickable(onClick = { requesters[entry.innerIndex + itemIndex].requestFocus() })
-        ) {
-            entry.itemContent(LazyItemScope(), itemIndex)
+    repeat(entry.count) { itemIndex ->
+        item(FocusableKey(requesters[itemIndex], entry.key?.invoke(itemIndex))) {
+            BoxWithConstraints(
+                Modifier
+                    .focusRequester(requesters[entry.innerIndex + itemIndex])
+                    .onFocusChanged { if (it.hasFocus) onItemFocused(entry.innerIndex + itemIndex) }
+                    .focusable()
+                    .onClick(onClick = { requesters[entry.innerIndex + itemIndex].requestFocus() })
+            ) {
+                entry.itemContent(LazyItemScope(), itemIndex)
+            }
         }
     }
 }
@@ -300,7 +307,7 @@ private fun LazyListScope.item(
     onItemFocused: (Int) -> Unit
 ) {
     val fr = FocusRequester()
-    item(FocusableKey(fr, entry.key)) {
+    item(FocusableKey(fr, entry.key), entry.contentType) {
         BoxWithConstraints(
             Modifier
                 .focusRequester(fr)
@@ -413,3 +420,6 @@ private class AnimateItemPlacementModifier(
         return animationSpec.hashCode()
     }
 }
+
+@Composable
+fun rememberScrollbarAdapter(state: FocusableLazyListState) = androidx.compose.foundation.rememberScrollbarAdapter(state.lazyListState)
