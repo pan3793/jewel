@@ -1,6 +1,10 @@
 package org.jetbrains.jewel.theme.intellij.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.forEachGesture
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -9,21 +13,19 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.onClick
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.times
 import org.jetbrains.jewel.theme.intellij.appendIf
 import org.jetbrains.jewel.theme.intellij.styles.LocalTreeKeybindings
@@ -34,6 +36,7 @@ import org.jetbrains.jewel.theme.intellij.styles.TreeViewStyle
 import org.jetbrains.jewel.theme.intellij.styles.updateTreeViewAppearanceTransition
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.random.Random
 
 @Composable
 fun <T> BaseTreeLayout(
@@ -43,6 +46,7 @@ fun <T> BaseTreeLayout(
     style: TreeViewStyle = LocalTreeViewStyle.current,
     treeClickHandler: TreeViewClickModifierHandler = LocalTreeViewClickModifierHandler.current,
     treeKeybindings: TreeViewKeybindings = LocalTreeKeybindings.current,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     onElementClick: (Tree.Element<T>) -> Unit,
     onElementDoubleClick: (Tree.Element<T>) -> Unit,
     onElementSelected: (Tree.Element<T>) -> Unit,
@@ -50,21 +54,17 @@ fun <T> BaseTreeLayout(
     onNodeToggle: (Tree.Element.Node<T>) -> Unit,
     rowContent: @Composable RowScope.(Tree.Element<T>) -> Unit
 ) {
-    var isFocused by remember { mutableStateOf(TreeViewState.fromBoolean(false)) }
-    val appearance = style.appearance(isFocused)
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val appearance = style.appearance(TreeViewState.fromBoolean(isFocused))
     val appearanceTransitionState = updateTreeViewAppearanceTransition(appearance)
 
     FocusableLazyColumn(
-        modifier = modifier.background(appearanceTransitionState.background)
-            .onFocusChanged { isFocused = TreeViewState.fromBoolean(it.hasFocus) },
+        modifier = modifier.background(appearanceTransitionState.background),
+        interactionSource = interactionSource,
         state = state
     ) {
-        itemsIndexed(
-            items = tree.flattenedTree,
-            key = { _, item -> item },
-            contentType = { _, item -> if (item.treeElement is Tree.Element.Node) 0 else 1 }
-        ) { index, treeElementWithDepth ->
-            val (element, depth) = treeElementWithDepth
+        tree.heads.forEach { element ->
             Row(
                 modifier = Modifier
                     .appendIf(element.isSelected) { background(appearanceTransitionState.selectedBackground) }
@@ -72,28 +72,35 @@ fun <T> BaseTreeLayout(
                         keyEvent.handleOnKeyEvent(
                             onElementDoubleClick = onElementDoubleClick,
                             element = element,
-                            index = index,
                             onElementSelected = onElementSelected,
                             onMultipleElementSelected = onMultipleElementSelected,
                             tree = tree,
                             onNodeToggle = onNodeToggle,
-                            depth = depth,
+                            depth = element.depth,
                             treeKeybindings = treeKeybindings,
                             state = state
                         )
                     }
+//                    .pointerInput(Unit) {
+//                        forEachGesture {
+//                            awaitPointerEventScope {
+//                                awaitFirstDown(false)
+//                                onElementClick(element)
+//                            }
+//                        }
+//                    }
                     .onClick(
                         keyboardModifiers = { true },
                         onClick = { onElementClick(element) },
                         onDoubleClick = { onElementDoubleClick(element) }
                     )
                     .onClick(
-                        keyboardModifiers = { treeClickHandler.getMultipleElementClickKeyboardModifier(this) },
+                        keyboardModifiers = treeClickHandler,
                         onClick = { onMultipleElementSelected(setOf(element)) }
                     ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.padding(start = depth * appearance.indentWidth, end = appearance.arrowEndPadding))
+                Box(Modifier.padding(start = element.depth * appearance.indentWidth, end = appearance.arrowEndPadding))
                 when (element) {
                     is Tree.Element.Leaf -> {
                         Box(modifier = Modifier.alpha(0f).paint(appearance.arrowPainter()))
@@ -103,7 +110,7 @@ fun <T> BaseTreeLayout(
                     is Tree.Element.Node -> {
                         Box(
                             modifier = Modifier.rotate(if (element.isOpen) 90f else 0f)
-                                .alpha(if (element.children.isEmpty()) 0f else 1f)
+                                .alpha(if (element.children?.isEmpty() == true) 0f else 1f)
                                 .paint(appearance.arrowPainter())
                                 .onClick { onNodeToggle(element) }
                         )
@@ -118,23 +125,23 @@ fun <T> BaseTreeLayout(
 @Composable
 fun <T> TreeView(
     tree: Tree<T>,
-    onTreeChanged: (Tree<T>) -> Unit,
     modifier: Modifier = Modifier,
     state: FocusableLazyListState = rememberFocusableLazyListState(),
     style: TreeViewStyle = LocalTreeViewStyle.current,
     treeClickHandler: TreeViewClickModifierHandler = LocalTreeViewClickModifierHandler.current,
     treeKeybindings: TreeViewKeybindings = LocalTreeKeybindings.current,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     onLeafDoubleClick: (Tree.Element<T>) -> Unit = { },
-    onElementClick: (Tree.Element<T>) -> Unit = { onTreeChanged(tree.selectOnly(it)) },
+    onElementClick: (Tree.Element<T>) -> Unit = { tree.selectOnly(it) },
     onElementDoubleClick: (Tree.Element<T>) -> Unit = {
         when (it) {
             is Tree.Element.Leaf -> onLeafDoubleClick(it)
-            is Tree.Element.Node -> onTreeChanged(tree.replaceElement(it, it.copy(isOpen = !it.isOpen)))
+            is Tree.Element.Node -> it.isOpen = !it.isOpen
         }
     },
-    onElementSelected: (Tree.Element<T>) -> Unit = { onTreeChanged(tree.selectElements(setOf(it))) },
-    onMultipleElementSelected: (Set<Tree.Element<T>>) -> Unit = { onTreeChanged(tree.selectElements(it.toSet())) },
-    onNodeToggle: (Tree.Element.Node<T>) -> Unit = { onTreeChanged(tree.replaceElement(it, it.copy(isOpen = !it.isOpen))) },
+    onElementSelected: (Tree.Element<T>) -> Unit = onElementClick,
+    onMultipleElementSelected: (Set<Tree.Element<T>>) -> Unit = { tree.select(it) },
+    onNodeToggle: (Tree.Element.Node<T>) -> Unit = { it.toggle() },
     rowContent: @Composable RowScope.(Tree.Element<T>) -> Unit
 ) {
     BaseTreeLayout(
@@ -144,6 +151,7 @@ fun <T> TreeView(
         style = style,
         treeClickHandler = treeClickHandler,
         treeKeybindings = treeKeybindings,
+        interactionSource = interactionSource,
         onElementClick = onElementClick,
         onElementDoubleClick = onElementDoubleClick,
         onElementSelected = onElementSelected,
@@ -167,26 +175,23 @@ private fun <T> KeyEvent.handleOnKeyEvent(
 ): Boolean {
 
     fun onElementSelected(index: Int): Boolean {
-        onElementSelected(tree.flattenedTree[index].treeElement)
+        onElementSelected(element.nextElement())
         return true
     }
 
     fun onMultipleElementSelected(from: Int, to: Int): Boolean {
-        onMultipleElementSelected(tree.flattenedTree.subList(from, to).map { it.treeElement }.toSet())
+        onMultipleElementSelected(
+            buildSet {
+                var current = element
+                while (val current = element.)
+            }
+        )
         return true
     }
 
     fun selectParent(): Boolean {
-        var currentIndex = index
-        val parentDepth = depth - 1
-        while (currentIndex > 0) {
-            currentIndex--
-            if (tree.flattenedTree[currentIndex].depth == parentDepth) {
-                break
-            }
-        }
-        check(currentIndex >= 0) { "Cannot find parent of $element" }
-        return onElementSelected(currentIndex)
+        onElementSelected(element.parent!!)
+        return true
     }
 
     fun onToggle(node: Tree.Element.Node<T>): Boolean {
@@ -236,8 +241,14 @@ private fun <T> KeyEvent.handleOnKeyEvent(
         treeKeybindings.scrollPageUpAndExtendSelection(this) == true ->
             onElementSelected(max(state.layoutInfo.visibleItemsInfo.size - index, 0))
 
-        treeKeybindings.extendSelectionToFirstElement(this) == true ->
-            onMultipleElementSelected(0, index)
+        treeKeybindings.extendSelectionToFirstElement(this) == true -> {
+            onMultipleElementSelected(
+                buildSet {
+
+                }
+            )
+            true
+        }
 
         treeKeybindings.extendSelectionToLastElement(this) == true ->
             onMultipleElementSelected(index, tree.flattenedTree.lastIndex)

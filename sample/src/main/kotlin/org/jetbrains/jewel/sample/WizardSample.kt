@@ -259,7 +259,6 @@ fun OutputDirectoriesLabelTree(modifier: Modifier = Modifier, outputDir: Mutable
                 modifier = Modifier.fillMaxWidth(),
                 tree = tree.value.orElse(Tree(emptyList())),
                 state = listState,
-                onTreeChanged = { tree.value = Optional.of(it) },
                 onLeafDoubleClick = { outputDir.value = it.data.absolutePath },
                 rowContent = {
                     val text: String = when (it) {

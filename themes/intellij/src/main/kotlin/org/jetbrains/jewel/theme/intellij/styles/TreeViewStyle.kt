@@ -17,11 +17,14 @@ import org.jetbrains.jewel.theme.intellij.IntelliJMetrics
 import org.jetbrains.jewel.theme.intellij.IntelliJPainters
 import org.jetbrains.jewel.theme.intellij.IntelliJPalette
 import org.jetbrains.jewel.theme.intellij.PainterProvider
-import org.jetbrains.jewel.theme.intellij.components.DefaultTreeViewClickModifierHandler
-import org.jetbrains.jewel.theme.intellij.components.DefaultWindowsTreeViewKeybindings
+import org.jetbrains.jewel.theme.intellij.components.DefaultMacOsTreeViewKeybindings
+import org.jetbrains.jewel.theme.intellij.components.DefaultTreeViewKeybindings
+import org.jetbrains.jewel.theme.intellij.components.DefaultWindowsTreeViewClickModifierHandler
 import org.jetbrains.jewel.theme.intellij.components.TreeViewClickModifierHandler
 import org.jetbrains.jewel.theme.intellij.components.TreeViewKeybindings
-import org.jetbrains.skiko.OS
+import org.jetbrains.skiko.OS.Linux
+import org.jetbrains.skiko.OS.MacOS
+import org.jetbrains.skiko.OS.Windows
 import org.jetbrains.skiko.hostOs
 
 typealias TreeViewStyle = ControlStyle<TreeViewAppearance, TreeViewState>
@@ -45,16 +48,15 @@ data class TreeViewAppearance(
 )
 
 val LocalTreeViewStyle = compositionLocalOf<TreeViewStyle> { localNotProvided() }
+
 val LocalTreeViewClickModifierHandler: ProvidableCompositionLocal<TreeViewClickModifierHandler> =
-    compositionLocalOf { DefaultTreeViewClickModifierHandler }
+    compositionLocalOf { DefaultWindowsTreeViewClickModifierHandler }
+
 val LocalTreeKeybindings = compositionLocalOf<TreeViewKeybindings> {
     when (hostOs) {
-        OS.Android -> TODO()
-        OS.Linux -> TODO()
-        OS.Windows -> DefaultWindowsTreeViewKeybindings
-        OS.MacOS -> TODO()
-        OS.Ios -> TODO()
-        OS.JS -> TODO()
+        MacOS -> DefaultMacOsTreeViewKeybindings
+        Linux, Windows -> DefaultTreeViewKeybindings
+        else -> error("OS not supported")
     }
 }
 

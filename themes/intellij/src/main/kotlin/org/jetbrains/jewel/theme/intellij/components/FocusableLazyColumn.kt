@@ -3,12 +3,14 @@ package org.jetbrains.jewel.theme.intellij.components
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.forEachGesture
 import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,10 +27,10 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.onClick
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -36,6 +38,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.InspectorValueInfo
@@ -226,6 +229,7 @@ fun FocusableLazyColumn(
         if (!reverseLayout) Arrangement.Top else Arrangement.Bottom,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
     flingBehavior: FlingBehavior = ScrollableDefaults.flingBehavior(),
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     onKeyPressed: (KeyEvent, Int) -> Boolean = { _, _ -> false },
     content: LazyListScope.() -> Unit
 ) {
@@ -235,10 +239,9 @@ fun FocusableLazyColumn(
                 state.lastFocusedIndexState.value?.let { onKeyPressed(event, it) } ?: false
             }
             .onFocusChanged {
-                println(it)
                 if (!it.hasFocus) state.lastFocusedIndexState.value = null
             }
-            .focusable()
+            .focusable(interactionSource = interactionSource)
     ) {
         LazyColumn(
             state = state.lazyListState,
@@ -253,11 +256,11 @@ fun FocusableLazyColumn(
                 .forEach { entry ->
                     when (entry) {
                         is LazyListScopeContainer.Entry.Item ->
-                            item(entry) { index: Int -> state.lastFocusedIndexState.value = index }
+                            item(entry, interactionSource) { index: Int -> state.lastFocusedIndexState.value = index }
                         is LazyListScopeContainer.Entry.Items ->
-                            items(entry) { index: Int -> state.lastFocusedIndexState.value = index }
+                            items(entry, interactionSource) { index: Int -> state.lastFocusedIndexState.value = index }
                         is LazyListScopeContainer.Entry.StickyHeader ->
-                            stickyHeader(entry) { index: Int -> state.lastFocusedIndexState.value = index }
+                            stickyHeader(entry, interactionSource) { index: Int -> state.lastFocusedIndexState.value = index }
                     }
                 }
         }
@@ -266,6 +269,7 @@ fun FocusableLazyColumn(
 
 private fun LazyListScope.stickyHeader(
     entry: LazyListScopeContainer.Entry.StickyHeader,
+    interactionSource: MutableInteractionSource,
     onItemFocused: (Int) -> Unit
 ) {
     val fr = FocusRequester()
@@ -274,7 +278,7 @@ private fun LazyListScope.stickyHeader(
             Modifier
                 .focusRequester(fr)
                 .onFocusChanged { if (it.hasFocus) onItemFocused(entry.innerIndex) }
-                .focusable()
+                .focusable(interactionSource = interactionSource)
                 .clickable(onClick = { fr.requestFocus() })
         ) {
             entry.content(LazyItemScope())
@@ -284,6 +288,7 @@ private fun LazyListScope.stickyHeader(
 
 private fun LazyListScope.items(
     entry: LazyListScopeContainer.Entry.Items,
+    interactionSource: MutableInteractionSource,
     onItemFocused: (Int) -> Unit
 ) {
     val requesters = List(entry.count) { FocusRequester() }
@@ -293,8 +298,15 @@ private fun LazyListScope.items(
                 Modifier
                     .focusRequester(requesters[entry.innerIndex + itemIndex])
                     .onFocusChanged { if (it.hasFocus) onItemFocused(entry.innerIndex + itemIndex) }
-                    .focusable()
-                    .onClick(onClick = { requesters[entry.innerIndex + itemIndex].requestFocus() })
+                    .focusable(interactionSource = interactionSource)
+//                    .pointerInput(Unit) {
+//                        forEachGesture {
+//                            awaitPointerEventScope {
+//                                awaitFirstDown(false)
+//                                requesters[itemIndex].requestFocus()
+//                            }
+//                        }
+//                    }
             ) {
                 entry.itemContent(LazyItemScope(), itemIndex)
             }
@@ -304,6 +316,7 @@ private fun LazyListScope.items(
 
 private fun LazyListScope.item(
     entry: LazyListScopeContainer.Entry.Item,
+    interactionSource: MutableInteractionSource,
     onItemFocused: (Int) -> Unit
 ) {
     val fr = FocusRequester()
@@ -312,8 +325,15 @@ private fun LazyListScope.item(
             Modifier
                 .focusRequester(fr)
                 .onFocusChanged { if (it.hasFocus) onItemFocused(entry.innerIndex) }
-                .focusable()
-                .combinedClickable(onClick = { fr.requestFocus() })
+                .focusable(interactionSource = interactionSource)
+                .pointerInput(Unit) {
+                    forEachGesture {
+                        awaitPointerEventScope {
+                            awaitFirstDown(false)
+                            fr.requestFocus()
+                        }
+                    }
+                }
         ) {
             entry.content(LazyItemScope())
         }

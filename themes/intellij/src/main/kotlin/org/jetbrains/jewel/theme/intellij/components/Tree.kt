@@ -1,110 +1,133 @@
 package org.jetbrains.jewel.theme.intellij.components
 
 import androidx.compose.runtime.Immutable
-import java.io.File
-import java.nio.file.Path
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 @Immutable
-data class Tree<T>(val heads: List<Element<T>>) {
+data class Tree<T> internal constructor(val heads: List<Element<T>>) {
+
+    internal var selectedElements = emptySet<Element<T>>()
+
+    sealed class Parent<T> {
+        data class Heads<T>(var heads: List<Element<T>>? = null) : Parent<T>()
+        data class Node<T>(val node: Element.Node<T>) : Parent<T>()
+    }
 
     sealed class Element<T> {
 
         abstract val data: T
-        abstract val isSelected: Boolean
+        abstract val depth: Int
+        abstract val parent: Parent<T>
+        internal abstract val childIndex: Int
+        var isSelected by mutableStateOf(false)
 
-        abstract fun withSelection(isSelected: Boolean = this.isSelected): Element<T>
+        fun nextElement() = nextElement(this)
 
-        @Immutable
-        data class Leaf<T>(override val data: T, override val isSelected: Boolean) : Element<T>() {
+        internal fun nextElement(original: Element<T>): Element<T> = when (this) {
+            is Leaf -> nextIntoParent(original)
+            is Node -> when (val children = children) {
+                null -> nextIntoParent(original)
+                else -> children[0]
+            }
+        }
 
-            override fun withSelection(isSelected: Boolean) = copy(isSelected = isSelected)
+        private fun nextIntoParent(original: Element<T>) = when (val parent = parent) {
+            is Parent.Heads -> {
+                val heads = parent.heads ?: error("Heads have not been initialized.")
+                when {
+                    childIndex < heads.lastIndex -> heads[childIndex + 1]
+                    else -> original
+                }
+            }
+
+            is Parent.Node -> {
+                val children = parent.node.children ?: error("WTF")
+                when {
+                    childIndex < children.lastIndex -> children[childIndex + 1]
+                    else -> parent.node.nextElement(original)
+                }
+            }
+        }
+
+        fun previousElement() = previousElement(this)
+
+        internal fun previousElement(original: Element<T>): Element<T> = when (val parent = parent) {
+            is Parent.Heads -> {
+                val heads = parent.heads ?: error("Heads have not been initialized.")
+                when {
+                    childIndex > 0 -> heads[childIndex - 1].lastInto()
+                    else -> original
+                }
+            }
+            is Parent.Node -> {
+                val children = parent.node.children ?: error("Children have not been initialized")
+                when {
+                    childIndex > 0 -> children[childIndex - 1].lastInto()
+                    else -> parent.node.previousElement(original)
+                }
+            }
+        }
+
+        private fun lastInto(): Element<T> = when (this) {
+            is Leaf -> this
+            is Node -> children?.lastOrNull()?.lastInto() ?: this
         }
 
         @Immutable
-        data class Node<T>(
+        data class Leaf<T>(
             override val data: T,
-            override val isSelected: Boolean,
-            val isOpen: Boolean = false,
-            val children: List<Element<T>>
+            override val depth: Int,
+            override val childIndex: Int,
+            override val parent: Parent<T>
+        ) : Element<T>()
+
+        @Immutable
+        class Node<T> internal constructor(
+            override val data: T,
+            override val depth: Int,
+            override val childIndex: Int,
+            override val parent: Parent<T>,
+            private val childrenGenerator: (parent: Node<T>) -> List<Element<T>>
         ) : Element<T>() {
 
-            override fun withSelection(isSelected: Boolean) = copy(isSelected = isSelected)
-        }
-    }
+            var isOpen by mutableStateOf(false)
+            var children by mutableStateOf<List<Element<T>>?>(null)
 
-    data class ElementWithDepth<T>(val treeElement: Element<T>, val depth: Int)
+            fun evaluateChildren() {
+                children = childrenGenerator(this)
+            }
 
-    val flattenedTree = buildList {
-        val stack = heads.map { it.withDepth(0) }.toMutableList()
-        while (stack.isNotEmpty()) {
-            val next = stack.removeAt(0)
-            add(next)
-            if (next.treeElement is Element.Node<T> && next.treeElement.isOpen) {
-                stack.addAll(0, next.treeElement.children.map { it.withDepth(next.depth + 1) })
+            fun toggle() {
+                isOpen = !isOpen
             }
         }
     }
 
-    /**
-     * Replaces the first occurrence of [old] in this [Tree] while traversing in depth first.
-     *
-     * @return Always a new [Tree], eventually with [old] replaced with [new].
-     */
-    fun replaceElement(old: Element<T>, new: Element<T>): Tree<T> = if (old != new)
-        Tree(heads.map { replaceRecursive(old, new, it, ItemFound(false)) })
-    else this
-
-    fun selectOnly(element: Element<T>) =
-        Tree(heads.map { replaceAndApplyOnAllRecursive(it) { if (it == element) it.withSelection(true) else it.withSelection(false) } })
-
-    fun selectElements(elements: Set<Element<T>>) = if (elements.isNotEmpty())
-        Tree(heads.map { replaceAndApplyOnAllRecursive(it) { if (it in elements) it.withSelection(true) else it } })
-    else this
-
-    private data class ItemFound(var value: Boolean)
-
-    private fun replaceAndApplyOnAllRecursive(
-        current: Element<T>,
-        action: (Element<T>) -> Element<T>
-    ): Element<T> = action(current).let {
-        when (it) {
-            is Element.Leaf -> it
-            is Element.Node -> it.copy(children = it.children.map { replaceAndApplyOnAllRecursive(it, action) })
-        }
+    fun selectOnly(element: Element<T>) {
+        // TODO the element might not be in the tree!
+        selectedElements.forEach { it.isSelected = false }
+        selectedElements = setOf(element.apply { isSelected = true })
     }
 
-    private fun replaceRecursive(
-        old: Element<T>,
-        new: Element<T>,
-        current: Element<T>,
-        found: ItemFound
-    ): Element<T> = when {
-        found.value -> current
-        current == old -> {
-            found.value = true
-            new
-        }
+    fun selectOnly(elements: Set<Element<T>>) {
+        selectedElements.minus(elements).forEach { it.isSelected = false }
+        selectedElements = elements.onEach { it.isSelected = true }
+    }
 
-        current is Element.Node<T> -> current.copy(children = current.children.map { replaceRecursive(old, new, it, found) })
-        else -> current
+    fun select(element: Element<T>) {
+        // TODO the element might not be in the tree!
+        selectedElements = selectedElements + element.also { it.isSelected = true }
+    }
+
+    fun select(elements: Set<Element<T>>) {
+        selectedElements = selectedElements + elements.onEach { it.isSelected = true }
+    }
+
+    fun deselectAll() {
+        selectedElements.forEach { it.isSelected = false }
+        selectedElements = emptySet()
     }
 }
 
-fun <T> Tree(head: Tree.Element<T>) = Tree(listOf(head))
-fun <T> Tree.Element<T>.withDepth(depth: Int) =
-    Tree.ElementWithDepth(this, depth)
-
-fun File.asTree(isOpen: Boolean = false) = Tree(asTreeElement(isOpen))
-fun Path.asTree(isOpen: Boolean = false) = Tree(toFile().asTreeElement(isOpen))
-fun File.asTreeElement(isOpen: Boolean = false): Tree.Element<File> =
-    if (isFile) Tree.Element.Leaf(this, false) else Tree.Element.Node(
-        data = this,
-        isSelected = false,
-        isOpen = isOpen,
-        children = listFiles()?.sortedBy {
-            when {
-                it.isDirectory -> "a"
-                else -> "b"
-            } + it.name
-        }?.map { it.asTreeElement(isOpen) } ?: emptyList()
-    )

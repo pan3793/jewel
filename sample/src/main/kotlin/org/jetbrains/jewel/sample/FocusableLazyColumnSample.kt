@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalFoundationApi::class)
-
 package org.jetbrains.jewel.sample
 
 import androidx.compose.foundation.ExperimentalFoundationApi

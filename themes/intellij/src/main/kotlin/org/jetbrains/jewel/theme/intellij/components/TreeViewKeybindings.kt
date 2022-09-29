@@ -2,60 +2,64 @@ package org.jetbrains.jewel.theme.intellij.components
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 
-open class DefaultWindowsTreeViewKeybindings : TreeViewKeybindings {
+open class DefaultTreeViewKeybindings : TreeViewKeybindings {
 
-    companion object : DefaultWindowsTreeViewKeybindings()
+    companion object : DefaultTreeViewKeybindings()
+
+    open val KeyEvent.isMultiSelectionKeyPressed: Boolean
+        get() = isShiftPressed
 
     override fun selectFirstElement(event: KeyEvent) =
         event.key == Key.Home
 
     override fun extendSelectionToFirstElement(event: KeyEvent) =
-        event.key == Key.Home && event.isShiftPressed
+        event.key == Key.Home && event.isMultiSelectionKeyPressed
 
     override fun selectLastElement(event: KeyEvent) =
         event.key == Key.MoveEnd
 
     override fun extendSelectionToLastElement(event: KeyEvent) =
-        event.key == Key.MoveEnd && event.isShiftPressed
+        event.key == Key.MoveEnd && event.isMultiSelectionKeyPressed
 
     override fun selectPreviousElement(event: KeyEvent) =
         event.key == Key.DirectionUp
 
     override fun extendSelectionWithPreviousElement(event: KeyEvent) =
-        event.key == Key.DirectionUp && event.isShiftPressed
+        event.key == Key.DirectionUp && event.isMultiSelectionKeyPressed
 
     override fun selectNextElement(event: KeyEvent) =
         event.key == Key.DirectionDown
 
     override fun extendSelectionWithNextElement(event: KeyEvent) =
-        event.key == Key.DirectionDown && event.isShiftPressed
+        event.key == Key.DirectionDown && event.isMultiSelectionKeyPressed
 
     override fun selectParentElement(event: KeyEvent) =
         event.key == Key.DirectionLeft
 
     override fun extendSelectionToParentElement(event: KeyEvent) =
-        event.key == Key.DirectionLeft && event.isShiftPressed
+        event.key == Key.DirectionLeft && event.isMultiSelectionKeyPressed
 
     override fun selectChildElement(event: KeyEvent) =
         event.key == Key.DirectionRight
 
     override fun extendSelectionToChildElement(event: KeyEvent) =
-        event.key == Key.DirectionRight && event.isShiftPressed
+        event.key == Key.DirectionRight && event.isMultiSelectionKeyPressed
 
     override fun scrollPageUpAndSelectElement(event: KeyEvent) =
         event.key == Key.PageUp
 
     override fun scrollPageUpAndExtendSelection(event: KeyEvent) =
-        event.key == Key.PageUp && event.isShiftPressed
+        event.key == Key.PageUp && event.isMultiSelectionKeyPressed
 
     override fun scrollPageDownAndSelectElement(event: KeyEvent) =
         event.key == Key.PageDown
 
     override fun scrollPageDownAndExtendSelection(event: KeyEvent) =
-        event.key == Key.PageDown && event.isShiftPressed
+        event.key == Key.PageDown && event.isMultiSelectionKeyPressed
 
     override fun selectNextSiblingElement(event: KeyEvent) = null
 
@@ -63,6 +67,13 @@ open class DefaultWindowsTreeViewKeybindings : TreeViewKeybindings {
 
     override fun editElement(event: KeyEvent) =
         event.key == Key.F2
+}
+
+open class DefaultMacOsTreeViewKeybindings : DefaultTreeViewKeybindings() {
+     companion object : DefaultMacOsTreeViewKeybindings()
+
+    override val KeyEvent.isMultiSelectionKeyPressed: Boolean
+        get() = isMetaPressed
 }
 
 interface TreeViewKeybindings {
