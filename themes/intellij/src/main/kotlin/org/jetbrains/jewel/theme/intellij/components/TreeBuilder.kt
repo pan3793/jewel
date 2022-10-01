@@ -1,6 +1,5 @@
 package org.jetbrains.jewel.theme.intellij.components
 
-import androidx.compose.ui.graphics.vector.addPathNodes
 import java.io.File
 import java.nio.file.Path
 
@@ -33,43 +32,78 @@ class TreeBuilder<T> {
     }
 
     fun build(): Tree<T> {
-        val parent = Tree.Parent.Heads<T>()
-        val elements = heads.mapIndexed { index, elementBuilder ->
-            when (elementBuilder) {
-                is Element.Leaf -> Tree.Element.Leaf(elementBuilder.data, 0, index, parent)
-                is Element.Node -> Tree.Element.Node(elementBuilder.data, 0, index, parent) { parent ->
-                    generateElements(parent, elementBuilder)
-                }
+        val elements = mutableListOf<Tree.Element<T>>()
+        for (index in heads.indices) {
+            val previous: Tree.Element<T>? = elements.getOrNull(index - 1)?.let { evaluatePrevious(it) }
+            val current = when (val elementBuilder = heads[index]) {
+                is Element.Leaf -> Tree.Element.Leaf(
+                    data = elementBuilder.data,
+                    depth = 0,
+                    childIndex = index,
+                    parent = null,
+                    previous = previous,
+                    next = null
+                )
+
+                is Element.Node -> Tree.Element.Node(
+                    data = elementBuilder.data,
+                    depth = 0,
+                    childIndex = index,
+                    parent = null,
+                    childrenGenerator = { parent -> generateElements(parent, elementBuilder) },
+                    isOpen = elementBuilder.isOpen,
+                    previous = previous,
+                    next = null
+                )
             }
+            elements.add(current)
+            previous?.also { it.next = current }
         }
-        parent.heads = elements
         return Tree(elements)
     }
 }
 
 private fun <T> generateElements(
     parent: Tree.Element.Node<T>,
-    elementBuilder: TreeBuilder.Element.Node<T>,
+    parentElementBuilder: TreeBuilder.Element.Node<T>,
 ): List<Tree.Element<T>> {
     val childrenGeneratorScope = ChildrenGeneratorScope(parent)
-    elementBuilder.childrenGenerator(childrenGeneratorScope)
-    return childrenGeneratorScope.elements.mapIndexed { index, elementBuilder ->
-        when (elementBuilder) {
+    parentElementBuilder.childrenGenerator(childrenGeneratorScope)
+    val elements = mutableListOf<Tree.Element<T>>()
+    for (index in childrenGeneratorScope.elements.indices) {
+        val previous = if (index == 0) parent else elements[index - 1]
+        val current = when (val elementBuilder = childrenGeneratorScope.elements[index]) {
             is TreeBuilder.Element.Leaf -> Tree.Element.Leaf(
                 data = elementBuilder.data,
                 depth = parent.depth + 1,
                 childIndex = index,
-                parent = Tree.Parent.Node(parent)
+                parent = parent,
+                previous = previous,
+                next = null
             )
 
             is TreeBuilder.Element.Node -> Tree.Element.Node(
                 data = elementBuilder.data,
                 depth = parent.depth + 1,
                 childIndex = index,
-                parent = Tree.Parent.Node(parent)
-            ) { generateElements(it, elementBuilder) }
-                .also { it.isOpen = elementBuilder.isOpen }
+                parent = parent,
+                childrenGenerator = { generateElements(it, elementBuilder) },
+                isOpen = elementBuilder.isOpen,
+                previous = previous,
+                next = null
+            )
         }
+        previous.next = current
+        elements.add(current)
+    }
+    return elements
+}
+
+private fun <T> evaluatePrevious(element: Tree.Element<T>): Tree.Element<T> = when (element) {
+    is Tree.Element.Leaf -> element
+    is Tree.Element.Node -> when (val nephews = element.children) {
+        null -> element
+        else -> if (nephews.isEmpty()) element else evaluatePrevious(nephews.last())
     }
 }
 
@@ -111,11 +145,4 @@ private fun ChildrenGeneratorScope<File>.generateFileNodes(isOpen: (File) -> Boo
                 else -> addNode(file, isOpen(file)) { generateFileNodes(isOpen) }
             }
         }
-}
-
-fun test() = buildTree {
-    addNode(20, false) {
-        addLeaf(2)
-        addNode(-3, isOpen = false)
-    }
 }

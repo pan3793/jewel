@@ -1,105 +1,88 @@
 package org.jetbrains.jewel.theme.intellij.components
 
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.util.LinkedList
 
-@Immutable
-data class Tree<T> internal constructor(val heads: List<Element<T>>) {
+data class Tree<T> internal constructor(val heads: List<Element<T>>) : Iterable<Tree.Element<T>> {
 
-    internal var selectedElements = emptySet<Element<T>>()
+    override fun iterator(): Iterator<Element<T>> = elementIterator(heads.firstOrNull()) { it.next }
 
-    sealed class Parent<T> {
-        data class Heads<T>(var heads: List<Element<T>>? = null) : Parent<T>()
-        data class Node<T>(val node: Element.Node<T>) : Parent<T>()
-    }
+    internal var flattenedTree = toMutableSet()
+
+    private var selectedElements = emptySet<Element<T>>()
 
     sealed class Element<T> {
 
         abstract val data: T
         abstract val depth: Int
-        abstract val parent: Parent<T>
+        abstract val parent: Element<T>?
         internal abstract val childIndex: Int
         var isSelected by mutableStateOf(false)
+        abstract var next: Element<T>?
+        abstract var previous: Element<T>?
 
-        fun nextElement() = nextElement(this)
+        fun previousElementsIterable() = Iterable { elementIterator(previous) { it.previous } }
+        fun nextElementsIterable() = Iterable { elementIterator(next) { it.next } }
 
-        internal fun nextElement(original: Element<T>): Element<T> = when (this) {
-            is Leaf -> nextIntoParent(original)
-            is Node -> when (val children = children) {
-                null -> nextIntoParent(original)
-                else -> children[0]
-            }
-        }
-
-        private fun nextIntoParent(original: Element<T>) = when (val parent = parent) {
-            is Parent.Heads -> {
-                val heads = parent.heads ?: error("Heads have not been initialized.")
-                when {
-                    childIndex < heads.lastIndex -> heads[childIndex + 1]
-                    else -> original
-                }
-            }
-
-            is Parent.Node -> {
-                val children = parent.node.children ?: error("WTF")
-                when {
-                    childIndex < children.lastIndex -> children[childIndex + 1]
-                    else -> parent.node.nextElement(original)
-                }
-            }
-        }
-
-        fun previousElement() = previousElement(this)
-
-        internal fun previousElement(original: Element<T>): Element<T> = when (val parent = parent) {
-            is Parent.Heads -> {
-                val heads = parent.heads ?: error("Heads have not been initialized.")
-                when {
-                    childIndex > 0 -> heads[childIndex - 1].lastInto()
-                    else -> original
-                }
-            }
-            is Parent.Node -> {
-                val children = parent.node.children ?: error("Children have not been initialized")
-                when {
-                    childIndex > 0 -> children[childIndex - 1].lastInto()
-                    else -> parent.node.previousElement(original)
-                }
-            }
-        }
-
-        private fun lastInto(): Element<T> = when (this) {
-            is Leaf -> this
-            is Node -> children?.lastOrNull()?.lastInto() ?: this
-        }
-
-        @Immutable
-        data class Leaf<T>(
+        class Leaf<T>(
             override val data: T,
             override val depth: Int,
             override val childIndex: Int,
-            override val parent: Parent<T>
+            override val parent: Element<T>?,
+            override var previous: Element<T>?,
+            override var next: Element<T>?
         ) : Element<T>()
 
-        @Immutable
-        class Node<T> internal constructor(
+        class Node<T>(
             override val data: T,
             override val depth: Int,
             override val childIndex: Int,
-            override val parent: Parent<T>,
-            private val childrenGenerator: (parent: Node<T>) -> List<Element<T>>
+            override val parent: Element<T>?,
+            private val childrenGenerator: (parent: Node<T>) -> List<Element<T>>,
+            isOpen: Boolean = false,
+            override var next: Element<T>?,
+            override var previous: Element<T>?
         ) : Element<T>() {
 
-            var isOpen by mutableStateOf(false)
+            internal var isOpen by mutableStateOf(false)
+                private set
+
             var children by mutableStateOf<List<Element<T>>?>(null)
+                private set
+
+            init {
+                if (isOpen) toggle()
+            }
 
             fun evaluateChildren() {
                 children = childrenGenerator(this)
             }
 
+            private fun connectChildren() {
+                val children = children ?: return
+                if (children.isNotEmpty()) {
+                    next?.also {
+                        it.previous = children.last()
+                        children.last().next = it
+                    }
+                    next = children.first()
+                    children.first().previous = this
+                }
+            }
+
+            private fun detachChildren() {
+                val children = children ?: return
+                if (children.isNotEmpty()) {
+                    next = children.last().next
+                    next?.previous = this
+                }
+            }
+
             fun toggle() {
+                if (children == null) evaluateChildren()
+                if (!isOpen) connectChildren() else detachChildren()
                 isOpen = !isOpen
             }
         }
@@ -112,6 +95,7 @@ data class Tree<T> internal constructor(val heads: List<Element<T>>) {
     }
 
     fun selectOnly(elements: Set<Element<T>>) {
+        // TODO the element might not be in the tree!
         selectedElements.minus(elements).forEach { it.isSelected = false }
         selectedElements = elements.onEach { it.isSelected = true }
     }
@@ -122,6 +106,7 @@ data class Tree<T> internal constructor(val heads: List<Element<T>>) {
     }
 
     fun select(elements: Set<Element<T>>) {
+        // TODO the element might not be in the tree!
         selectedElements = selectedElements + elements.onEach { it.isSelected = true }
     }
 
@@ -131,3 +116,12 @@ data class Tree<T> internal constructor(val heads: List<Element<T>>) {
     }
 }
 
+private fun <T> elementIterator(initial: Tree.Element<T>?, next: (Tree.Element<T>) -> Tree.Element<T>?) =
+    iterator {
+        var current = initial ?: return@iterator
+        yield(current)
+        while (true) {
+            current = next(current) ?: break
+            yield(current)
+        }
+    }

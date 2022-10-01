@@ -1,15 +1,12 @@
 package org.jetbrains.jewel.theme.intellij.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.forEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.onClick
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,7 +22,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.times
 import org.jetbrains.jewel.theme.intellij.appendIf
 import org.jetbrains.jewel.theme.intellij.styles.LocalTreeKeybindings
@@ -35,8 +31,6 @@ import org.jetbrains.jewel.theme.intellij.styles.TreeViewState
 import org.jetbrains.jewel.theme.intellij.styles.TreeViewStyle
 import org.jetbrains.jewel.theme.intellij.styles.updateTreeViewAppearanceTransition
 import kotlin.math.max
-import kotlin.math.min
-import kotlin.random.Random
 
 @Composable
 fun <T> BaseTreeLayout(
@@ -136,7 +130,7 @@ fun <T> TreeView(
     onElementDoubleClick: (Tree.Element<T>) -> Unit = {
         when (it) {
             is Tree.Element.Leaf -> onLeafDoubleClick(it)
-            is Tree.Element.Node -> it.isOpen = !it.isOpen
+            is Tree.Element.Node -> it.toggle()
         }
     },
     onElementSelected: (Tree.Element<T>) -> Unit = onElementClick,
@@ -174,21 +168,6 @@ private fun <T> KeyEvent.handleOnKeyEvent(
     state: FocusableLazyListState
 ): Boolean {
 
-    fun onElementSelected(index: Int): Boolean {
-        onElementSelected(element.nextElement())
-        return true
-    }
-
-    fun onMultipleElementSelected(from: Int, to: Int): Boolean {
-        onMultipleElementSelected(
-            buildSet {
-                var current = element
-                while (val current = element.)
-            }
-        )
-        return true
-    }
-
     fun selectParent(): Boolean {
         onElementSelected(element.parent!!)
         return true
@@ -211,35 +190,52 @@ private fun <T> KeyEvent.handleOnKeyEvent(
             is Tree.Element.Node -> onToggle(element)
         }
 
-        index > 0 && key == Key.DirectionUp -> onElementSelected(index - 1)
-
-        index < tree.flattenedTree.lastIndex && key == Key.DirectionDown -> onElementSelected(index + 1)
-
-        key == Key.DirectionRight -> when {
-            element is Tree.Element.Node<T> && !element.isOpen -> onToggle(element)
-            index < tree.flattenedTree.lastIndex -> onElementSelected(index + 1)
-            else -> false
+        key == Key.DirectionUp -> {
+            element.previous?.let(onElementSelected)
+            true
         }
 
-        key == Key.DirectionLeft -> when {
-            element is Tree.Element.Node<T> && element.isOpen -> onToggle(element)
-            index > 0 -> when (element) {
-                !in tree.heads -> selectParent()
-                else -> onElementSelected(0)
+        key == Key.DirectionDown -> {
+            element.next?.let(onElementSelected)
+            true
+        }
+
+        key == Key.DirectionRight -> {
+            when {
+                element is Tree.Element.Node<T> && !element.isOpen -> onToggle(element)
+                else -> element.next?.let(onElementSelected)
             }
-
-            else -> false
+            true
         }
 
-        treeKeybindings.selectFirstElement(this) == true -> onElementSelected(0)
+        key == Key.DirectionLeft -> {
+            when {
+                element is Tree.Element.Node<T> && element.isOpen -> onToggle(element)
+                else -> element.parent?.let(onElementSelected)
+            }
+            true
+        }
 
-        treeKeybindings.selectLastElement(this) == true -> onElementSelected(tree.flattenedTree.lastIndex)
+        treeKeybindings.selectFirstElement(this) == true -> {
+            onElementSelected(tree.first())
+            true
+        }
 
-        treeKeybindings.scrollPageDownAndSelectElement(this) == true ->
-            onElementSelected(min(index + state.layoutInfo.visibleItemsInfo.size, tree.flattenedTree.size))
+        treeKeybindings.selectLastElement(this) == true -> {
+            onElementSelected(element.nextElementsIterable().last())
+            true
+        }
 
-        treeKeybindings.scrollPageUpAndExtendSelection(this) == true ->
-            onElementSelected(max(state.layoutInfo.visibleItemsInfo.size - index, 0))
+        treeKeybindings.scrollPageDownAndSelectElement(this) == true -> {
+            onElementSelected(element.nextElementsIterable().take(index + state.layoutInfo.visibleItemsInfo.size).last())
+            true
+        }
+
+        treeKeybindings.scrollPageUpAndExtendSelection(this) == true -> {
+            state.layoutInfo.visibleItemsInfo.size - index
+            onMultipleElementSelected(max(state.layoutInfo.visibleItemsInfo.size - index, 0))
+            true
+        }
 
         treeKeybindings.extendSelectionToFirstElement(this) == true -> {
             onMultipleElementSelected(
