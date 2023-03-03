@@ -1,0 +1,16 @@
+### done:
+Chips!
+FocussableLazyColumn (Porting)
+TreeComposable (With Bugs)
+focus is lost for some reason on recomposition [TreeComposable]
+keyboard commands for navigate tree hase issues, probably there is a bug on tree iterator handling  [Tree, TreeComposable]
+
+### bugs:
+- shift click fail
+### soft issues:
+1- highlight color is not correct for tree focus interaction [TreeComposable]
+2- Scroller for lazy column need to be conformed to theme [FocussableLazyColumn]
+
+### futures
+1- a horizontal scroller for splitpanel e/o scroller should be implemented [SplitPane]
+2- code should be refactored hard!
