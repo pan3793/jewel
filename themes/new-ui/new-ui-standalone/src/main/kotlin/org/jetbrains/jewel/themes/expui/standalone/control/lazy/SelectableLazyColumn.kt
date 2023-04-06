@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
@@ -46,6 +48,9 @@ fun SelectableLazyColumn(
     actions: SelectableColumnOnKeyEvent,
     content: SelectableLazyListScope.() -> Unit
 ) {
+    LaunchedEffect(keybindings) {
+        state.attachKeybindings(keybindings, actions)
+    }
     val container = remember(content) { SelectableLazyListScopeDelegate(state).apply(content) }
     val uiId = remember { UUID.randomUUID().toString() }
     SideEffect { state.attachKeys(container.keys, uiId) }
@@ -68,6 +73,7 @@ class SelectableLazyListState(
     internal val delegate: FocusableLazyListState = FocusableLazyListState()
 ) : FocusableState by delegate {
 
+    internal var lastKeyEventUsedMouse: Boolean = false
     internal val selectedIdsMap = mutableStateMapOf<Any?, Int>()
     internal var keys = emptyList<Any?>()
 
@@ -103,6 +109,13 @@ class SelectableLazyListState(
     val interactionSource
         get() = delegate.interactionSource
 
+    var keybindings: SelectableColumnKeybindings = DefaultSelectableColumnKeybindings.Companion
+    var actions: SelectableColumnOnKeyEvent = DefaultSelectableColumnOnKeyEvent
+    fun attachKeybindings(keybindings: SelectableColumnKeybindings, actions: SelectableColumnOnKeyEvent) {
+        this.keybindings = keybindings
+        this.actions = actions
+    }
+
     suspend fun selectSingleItem(itemIndex: Int) {
         focusItem(itemIndex)
         deselectAll()
@@ -127,21 +140,21 @@ class SelectableLazyListState(
 
     suspend fun deselectAll() = selectedIdsMap.clear()
 
-    suspend fun addElementsToSelection(itemIndexes: List<Int>, itemToFocus: Int= itemIndexes.last()) {
+    suspend fun addElementsToSelection(itemIndexes: List<Int>, itemToFocus: Int = itemIndexes.last()) {
         itemIndexes.forEach {
             selectedIdsMap[keys[it]] = it
         }
         focusItem(itemToFocus)
     }
 
-    suspend fun removeElementsToSelection(itemIndexes: List<Int>, itemToFocus: Int= itemIndexes.last()) {
+    suspend fun removeElementsToSelection(itemIndexes: List<Int>, itemToFocus: Int = itemIndexes.last()) {
         itemIndexes.forEach {
             selectedIdsMap.remove(keys[it])
         }
         focusItem(itemToFocus)
     }
 
-    suspend fun toggleElementsToSelection(itemIndexes: List<Int>, itemToFocus: Int= itemIndexes.last()) {
+    suspend fun toggleElementsToSelection(itemIndexes: List<Int>, itemToFocus: Int = itemIndexes.last()) {
         itemIndexes.forEach { index ->
             selectedIdsMap[keys[index]]?.let {
                 selectedIdsMap.remove(keys[index])
@@ -149,7 +162,7 @@ class SelectableLazyListState(
         }
         focusItem(itemToFocus)
     }
-/** ------>    CONTROL ALT L PLOXX <----------**/
+
     internal fun attachKeys(keys: List<Any?>, uiId: String) {
 
         if (this.uiId == null) {
@@ -174,9 +187,9 @@ internal class SelectableLazyItemScopeImpl(
     delegate: FocusableLazyItemScope,
     isSelectedSate: State<Boolean>
 ) : SelectableLazyItemScope, FocusableLazyItemScope by delegate {
+
     override val isSelected by isSelectedSate
 }
-
 
 context(FocusableLazyItemScope, BoxWithConstraintsScope)
 internal fun SelectableLazyItemScope(isSelectedSate: State<Boolean>): SelectableLazyItemScope =
@@ -218,13 +231,21 @@ interface SelectableLazyListScope {
 internal fun FocusableLazyListScope.SelectableLazyListScope(state: SelectableLazyListState) =
     SelectableLazyListScopeDelegate(state, this)
 
+sealed interface SelectableKey {
+
+    val key: Any?
+
+    class Selectable(override val key: Any?) : SelectableKey
+    class NotSelectable(override val key: Any?) : SelectableKey
+}
+
 internal class SelectableLazyListScopeDelegate(private val state: SelectableLazyListState) : SelectableLazyListScope {
 
-    private val _keys = mutableListOf<Any?>()
+    private val _keys = mutableListOf<SelectableKey>()
 
     private val delegate = FocusableLazyListScopeContainer()
 
-    val keys: List<Any?>
+    val keys: List<SelectableKey>
         get() = _keys
 
     val entries: List<FocusableLazyListScopeContainer.Entry>
@@ -237,13 +258,13 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
         selectable: Boolean,
         content: SelectableLazyItemScope.() -> Unit
     ) {
-        _keys.add(key)
+        _keys.add(if (selectable) SelectableKey.Selectable(key) else SelectableKey.NotSelectable(key))
         delegate.item(key, contentType, focusable) {
             val scope = rememberCoroutineScope()
             if (selectable) {
                 BoxWithConstraints(
                     modifier = Modifier.onPointerEvent(PointerEventType.Press) {
-                        with(keybindings) {
+                        with(state.keybindings) {
                             when {
                                 it.keyboardModifiers.isKeyboardMultiSelectionKeyPressed && it.keyboardModifiers.isCtrlPressed -> {
                                     println("ctrl and shift pressed on click")
@@ -298,6 +319,7 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
         TODO("Not yet implemented")
     }
 }
+
 @Composable
 fun rememberSelectableLazyListState(delegate: FocusableLazyListState = FocusableLazyListState()) =
     remember { SelectableLazyListState(delegate) }
