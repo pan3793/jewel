@@ -135,6 +135,7 @@ class SelectableLazyListState(
     suspend fun selectSingleItem(itemIndex: Int) {
         focusItem(itemIndex)
         deselectAll()
+        println("i'm going to select key: ${keys[itemIndex]} with index: $itemIndex ")
         selectedIdsMap[keys[itemIndex]] = itemIndex
     }
 
@@ -322,6 +323,15 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
                                     println("single click")
                                     scope.launch {
                                         state.selectSingleKey(SelectableKey.Selectable(key))
+                                        println("------------------------------")
+                                        println("requested selection for key $key")
+                                        println("-----")
+                                        println("all keys: ${state.keys.map { it.toString() }.toList().joinToString(("\n"))}")
+                                        println("-----")
+                                        println("selected keys: ${state.selectedIdsMap.keys.map { it.toString() }.toList().joinToString(("\n"))}")
+                                        println("-----")
+                                        println("selected item indexes 2: ${state.selectedItemIndexes.joinToString(("\n"))}")
+                                        println("------------------------------")
                                     }
 //                                    onElementClick(element) TODO
                                 }
