@@ -122,7 +122,6 @@ fun main() = application {
                                 availableFilters = pkgsViewModel.searchFilters,
                                 searchResultsStateList = pkgsViewModel.searchResults,
                                 onSearchResultClick = { pkgsViewModel.selectedResult.value = it },
-                                selectedResult = pkgsViewModel.selectedResult,
                                 selectedModule = pkgsViewModel.selectedModule,
                                 addedModules = pkgsViewModel.addedModules.value
                             )

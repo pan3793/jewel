@@ -112,7 +112,7 @@ internal fun BaseFocusableLazyColumn(
 ) {
     Box(
         modifier
-            .onPreviewKeyEvent { event -> state.lastFocusedIndex.value?.let { onKeyPressed(event, it) } ?: false }
+            .onPreviewKeyEvent { event -> state.lastFocusedIndex?.let { onKeyPressed(event, it) } ?: false }
             .focusable(interactionSource = interactionSource)
     ) {
         LazyColumn(
@@ -239,7 +239,7 @@ private fun LazyListScope.items(
         } else {
             entry.itemContent(FocusableLazyItemScope(), itemIndex)
         }
-        if (state.lastFocusedIndex.value == itemFinalIndex) {
+        if (state.lastFocusedIndex == itemFinalIndex) {
             SideEffect { requesters[itemIndex]!!.requestFocus() }
         }
     }

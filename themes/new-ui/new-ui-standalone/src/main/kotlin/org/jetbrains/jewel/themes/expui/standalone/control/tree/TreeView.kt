@@ -90,7 +90,7 @@ fun <T> TreeView(
 
                                 else -> {
                                     treeState.selectSingleElement(element)
-                                    onElementClick(element)
+                                    onElementClick(element as Tree.Element<T>)
                                     println("single click")
                                 }
                             }
@@ -102,7 +102,7 @@ fun <T> TreeView(
                             if (element is Tree.Element.Node) {
                                 treeState.toggleNode(element)
                             }
-                            onElementDoubleClick(element)
+                            onElementDoubleClick(element as Tree.Element<T>)
                             println("Double click")
                         }
                     )
@@ -110,7 +110,7 @@ fun <T> TreeView(
                 when (element) {
                     is Tree.Element.Leaf -> {
                         Box(modifier = Modifier.alpha(0f).width((element.depth * 20).dp))
-                        elementContent(element)
+                        elementContent(element as Tree.Element<T>)
                     }
 
                     is Tree.Element.Node -> {
@@ -124,14 +124,14 @@ fun <T> TreeView(
                                             awaitFirstDown(false)
                                             treeState.openNode(element)
                                             treeState.selectSingleElement(element)
-                                            onElementDoubleClick(element)
+                                            onElementDoubleClick(element as Tree.Element<T>)
                                         }
                                     }
                                 }
                         ) {
                             Icon("icons/nodeDropTriangle.svg")
                         }
-                        elementContent(element)
+                        elementContent(element as Tree.Element<T>)
                     }
                 }
             }
@@ -154,6 +154,7 @@ fun CoroutineScope.handleTreeOnKeyEvent(
                 selectNextSibling() ?: false -> launch { onSelectNextSibling(focusedIndex) }
                 selectPreviousSibling() ?: false -> launch { onSelectPreviousSibling(focusedIndex) }
                 selectParent() ?: false -> launch { onSelectParent(focusedIndex) }
+                selectChild() ?: false -> launch { onSelectChild(focusedIndex) }
                 else -> return@lambda false
             }
         }

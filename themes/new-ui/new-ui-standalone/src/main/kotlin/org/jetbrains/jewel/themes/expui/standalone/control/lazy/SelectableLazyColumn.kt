@@ -45,7 +45,7 @@ fun SelectableLazyColumn(
     flingBehavior: FlingBehavior = ScrollableDefaults.flingBehavior(),
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     keybindings: SelectableColumnKeybindings = DefaultSelectableColumnKeybindings,
-    actions: SelectableColumnOnKeyEvent,
+    actions: SelectableColumnOnKeyEvent = DefaultSelectableOnKeyEvent(keybindings, state),
     content: SelectableLazyListScope.() -> Unit
 ) {
     LaunchedEffect(keybindings) {
@@ -81,6 +81,7 @@ class SelectableLazyListState(
 
     private var uiId: String? = null
 
+    fun isKeySelected(key: Any?) = selectedIdsMap.containsKey(key)
     val selectedItemIndexes: Collection<Int>
         get() = selectedItemIndexesState.value
 
@@ -110,16 +111,36 @@ class SelectableLazyListState(
         get() = delegate.interactionSource
 
     var keybindings: SelectableColumnKeybindings = DefaultSelectableColumnKeybindings.Companion
-    var actions: SelectableColumnOnKeyEvent = DefaultSelectableColumnOnKeyEvent
+
+    //    var actions: SelectableColumnOnKeyEvent = DefaultSelectableOnKeyEvent(keybindings,DefaultSelectableOnKeyEvent)
     fun attachKeybindings(keybindings: SelectableColumnKeybindings, actions: SelectableColumnOnKeyEvent) {
         this.keybindings = keybindings
-        this.actions = actions
+//        this.actions = actions
+    }
+
+    fun indexOfNextSelectable(currentIndex: Int): Int? {
+        for (i in currentIndex..keys.lastIndex) {
+            if (keys[i] is SelectableKey.Selectable) return i
+        }
+        return null
+    }
+
+    fun indexOfPreviousSelectable(currentIndex: Int): Int? {
+        for (i in currentIndex downTo 0) {
+            if (keys[i] is SelectableKey.Selectable) return i
+        }
+        return null
     }
 
     suspend fun selectSingleItem(itemIndex: Int) {
         focusItem(itemIndex)
         deselectAll()
         selectedIdsMap[keys[itemIndex]] = itemIndex
+    }
+
+    suspend fun selectSingleKey(key: SelectableKey) {
+        val index = keys.indexOf(key.key)
+        if (index > 0 && key is SelectableKey.Selectable) selectSingleItem(index)
     }
 
     suspend fun deselectSingleElement(itemIndex: Int) {
@@ -131,6 +152,16 @@ class SelectableLazyListState(
         selectedIdsMap[keys[itemIndex]]?.let {
             deselectSingleElement(itemIndex)
         } ?: addElementToSelection(itemIndex)
+    }
+
+    suspend fun toggleSelectionKey(key: SelectableKey) {
+        val index = keys.indexOf(key.key)
+        if (index > 0 && key is SelectableKey.Selectable) toggleSelection(index)
+    }
+
+    suspend fun onExtendSelectionToKey(key: SelectableKey) {
+        val index = keys.indexOf(key.key)
+        if (index > 0 && key is SelectableKey.Selectable) toggleSelection(index)
     }
 
     suspend fun addElementToSelection(itemIndex: Int) {
@@ -192,6 +223,7 @@ internal class SelectableLazyItemScopeImpl(
 }
 
 context(FocusableLazyItemScope, BoxWithConstraintsScope)
+@Composable
 internal fun SelectableLazyItemScope(isSelectedSate: State<Boolean>): SelectableLazyItemScope =
     SelectableLazyItemScopeImpl(FocusableLazyItemScope(derivedStateOf { isFocused }), isSelectedSate)
 
@@ -216,7 +248,7 @@ interface SelectableLazyListScope {
         contentType: (index: Int) -> Any? = { null },
         focusable: (index: Int) -> Boolean = { true },
         selectable: (index: Int) -> Boolean = { true },
-        itemContent: SelectableLazyItemScope.(index: Int) -> Unit
+        itemContent: @Composable SelectableLazyItemScope.(index: Int) -> Unit
     )
 
     fun stickyHeader(
@@ -224,12 +256,12 @@ interface SelectableLazyListScope {
         contentType: Any? = null,
         focusable: Boolean = false,
         selectable: Boolean = false,
-        content: SelectableLazyItemScope.() -> Unit
+        content: @Composable SelectableLazyItemScope.() -> Unit
     )
 }
 
 internal fun FocusableLazyListScope.SelectableLazyListScope(state: SelectableLazyListState) =
-    SelectableLazyListScopeDelegate(state, this)
+    SelectableLazyListScopeDelegate(state)
 
 sealed interface SelectableKey {
 
@@ -256,7 +288,7 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
         contentType: Any?,
         focusable: Boolean,
         selectable: Boolean,
-        content: SelectableLazyItemScope.() -> Unit
+        content: @Composable SelectableLazyItemScope.() -> Unit
     ) {
         _keys.add(if (selectable) SelectableKey.Selectable(key) else SelectableKey.NotSelectable(key))
         delegate.item(key, contentType, focusable) {
@@ -268,25 +300,30 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
                             when {
                                 it.keyboardModifiers.isKeyboardMultiSelectionKeyPressed && it.keyboardModifiers.isCtrlPressed -> {
                                     println("ctrl and shift pressed on click")
+                                    //do nothing
                                 }
 
                                 it.keyboardModifiers.isKeyboardMultiSelectionKeyPressed -> {
-                                    println("ShiftClicked ")
+                                    println("shift pressed on click")
                                     scope.launch {
-                                        actions.onExtendSelectionTo(itemIndex)
+                                        state.onExtendSelectionToKey(SelectableKey.Selectable(key))
                                     }
                                 }
 
                                 it.keyboardModifiers.isCtrlPressed -> {
-                                    println("controll pressed")
-                                    treeState.lastKeyEventUsedMouse = false
-                                    treeState.toggleElementSelection(element)
+                                    println("ctrl pressed on click")
+                                    state.lastKeyEventUsedMouse = false
+                                    scope.launch {
+                                        state.toggleSelectionKey(SelectableKey.Selectable(key))
+                                    }
                                 }
 
                                 else -> {
-                                    treeState.selectSingleElement(element)
-                                    onElementClick(element)
                                     println("single click")
+                                    scope.launch {
+                                        state.selectSingleKey(SelectableKey.Selectable(key))
+                                    }
+//                                    onElementClick(element) TODO
                                 }
                             }
                         }
@@ -304,9 +341,15 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
         contentType: (index: Int) -> Any?,
         focusable: (index: Int) -> Boolean,
         selectable: (index: Int) -> Boolean,
-        itemContent: SelectableLazyItemScope.(index: Int) -> Unit
+        itemContent: @Composable SelectableLazyItemScope.(index: Int) -> Unit
     ) {
-        TODO("Not yet implemented")
+        repeat(count) {
+            val selectable = selectable(it)
+            _keys.add(if (selectable) SelectableKey.Selectable(key) else SelectableKey.NotSelectable(key))
+            item(key(it), contentType(it), focusable(it), selectable) {
+                itemContent(it)
+            }
+        }
     }
 
     override fun stickyHeader(
@@ -314,9 +357,51 @@ internal class SelectableLazyListScopeDelegate(private val state: SelectableLazy
         contentType: Any?,
         focusable: Boolean,
         selectable: Boolean,
-        content: SelectableLazyItemScope.() -> Unit
+        content: @Composable SelectableLazyItemScope.() -> Unit
     ) {
-        TODO("Not yet implemented")
+        _keys.add(if (selectable) SelectableKey.Selectable(key) else SelectableKey.NotSelectable(key))
+        delegate.item(key, contentType, focusable) {
+            if (selectable) {
+                val scope = rememberCoroutineScope()
+                BoxWithConstraints(
+                    modifier = Modifier.onPointerEvent(PointerEventType.Press) {
+                        with(state.keybindings) {
+                            when {
+                                it.keyboardModifiers.isKeyboardMultiSelectionKeyPressed && it.keyboardModifiers.isCtrlPressed -> {
+                                    println("ctrl and shift pressed on click")
+                                    //do nothing
+                                }
+
+                                it.keyboardModifiers.isKeyboardMultiSelectionKeyPressed -> {
+                                    println("shift pressed on click")
+                                    scope.launch {
+                                        state.onExtendSelectionToKey(SelectableKey.Selectable(key))
+                                    }
+                                }
+
+                                it.keyboardModifiers.isCtrlPressed -> {
+                                    println("ctrl pressed on click")
+                                    state.lastKeyEventUsedMouse = false
+                                    scope.launch {
+                                        state.toggleSelectionKey(SelectableKey.Selectable(key))
+                                    }
+                                }
+
+                                else -> {
+                                    println("single click")
+                                    scope.launch {
+                                        state.selectSingleKey(SelectableKey.Selectable(key))
+                                    }
+//                                    onElementClick(element) TODO
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    SelectableLazyItemScope(derivedStateOf { key in state.selectedIdsMap }).content()
+                }
+            } else SelectableLazyItemScope().content()
+        }
     }
 }
 

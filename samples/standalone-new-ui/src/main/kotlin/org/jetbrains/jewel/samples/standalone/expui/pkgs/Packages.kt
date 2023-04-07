@@ -45,7 +45,9 @@ import org.jetbrains.jewel.themes.expui.standalone.control.Link
 import org.jetbrains.jewel.themes.expui.standalone.control.LinkColors
 import org.jetbrains.jewel.themes.expui.standalone.control.TextField
 import org.jetbrains.jewel.themes.expui.standalone.control.lazy.FocusableLazyColumn
+import org.jetbrains.jewel.themes.expui.standalone.control.lazy.SelectableLazyColumn
 import org.jetbrains.jewel.themes.expui.standalone.control.lazy.items
+import org.jetbrains.jewel.themes.expui.standalone.control.lazy.rememberSelectableLazyListState
 import org.jetbrains.jewel.themes.expui.standalone.style.LocalAreaColors
 import org.jetbrains.jewel.themes.expui.standalone.style.LocalDefaultTextStyle
 import org.jetbrains.jewel.themes.expui.standalone.style.LocalDisabledAreaColors
@@ -81,7 +83,6 @@ fun main() = application {
                 availableFilters = pkgsViewModel.searchFilters,
                 searchResultsStateList = pkgsViewModel.searchResults,
                 onSearchResultClick = { pkgsViewModel.selectedResult.value = it },
-                selectedResult = pkgsViewModel.selectedResult,
                 selectedModule = pkgsViewModel.selectedModule,
                 addedModules = pkgsViewModel.addedModules.value
             )
@@ -162,7 +163,6 @@ fun PackageSearchBox(
     onFilterChange: (String, Boolean) -> Unit = { k, v -> availableFilters[k] = v },
     searchResultsStateList: SnapshotStateList<PKGSResult>,
     onSearchResultClick: (PKGSResult) -> Unit = { println("clicked $it") },
-    selectedResult: MutableState<PKGSResult?>,
     selectedModule: String,
     addedModules: List<PKGSResult>
 ) {
@@ -170,8 +170,9 @@ fun PackageSearchBox(
     Column(Modifier) {
         SearchRow(textSearchState, onTextValueChange, onFilterChange, availableFilters)
         Spacer(Modifier.height(8.dp))
-        FocusableLazyColumn {
-            stickyHeader {
+        val selectableState = rememberSelectableLazyListState()
+        SelectableLazyColumn(state = selectableState) {
+            stickyHeader("header") {
                 Row(
                     Modifier.fillMaxWidth()
                         .background(LocalDisabledAreaColors.current.endBorderColor).fillMaxWidth()
@@ -184,11 +185,12 @@ fun PackageSearchBox(
                 }
             }
             addedModules.forEach {
-                item {
+                val key = it.hashCode()
+                item(key) {
                     Row(
                         Modifier
                             .background(
-                                if (selectedResult.value == it) LocalFocusAreaColors.current.focusColor.copy(alpha = .3f)
+                                if (selectableState.isKeySelected(key)) LocalFocusAreaColors.current.focusColor.copy(alpha = .3f)
                                 else Color.Unspecified
                             )
                     )
@@ -197,10 +199,10 @@ fun PackageSearchBox(
             }
             if (searchResultsStateList.isNotEmpty()) {
 
-                item {
+                item("spacer") {
                     Spacer(Modifier.height(8.dp))
                 }
-                stickyHeader {
+                stickyHeader("header2") {
                     Row(Modifier.fillMaxWidth().background(LocalDisabledAreaColors.current.endBorderColor).fillMaxWidth()) {
                         Label(
                             modifier = Modifier.padding(vertical = 4.dp),
@@ -210,7 +212,7 @@ fun PackageSearchBox(
                     }
                 }
                 items(
-                    items = searchResultsStateList,
+                    count = searchResultsStateList.size,
                     key = {
                         it
                     },
@@ -221,11 +223,11 @@ fun PackageSearchBox(
                     Row(
                         Modifier
                             .background(
-                                if (selectedResult.value == it) LocalFocusAreaColors.current.focusColor.copy(alpha = .3f)
+                                if (isSelected) LocalFocusAreaColors.current.focusColor.copy(alpha = .3f)
                                 else Color.Unspecified
                             )
                     )
-                    { it.composable(onSearchResultClick) }
+                    { searchResultsStateList[it].composable(onSearchResultClick) }
                 }
             }
         }

@@ -3,12 +3,12 @@ package org.jetbrains.jewel.themes.expui.standalone.control.tree
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import org.jetbrains.jewel.themes.expui.standalone.control.lazy.FocusableLazyListStateImpl
+import org.jetbrains.jewel.themes.expui.standalone.control.lazy.FocusableLazyListState
 import org.jetbrains.jewel.themes.expui.standalone.control.lazy.FocusableState
 import kotlin.properties.Delegates
 
 class TreeState(
-    val focusableLazyListState: FocusableLazyListStateImpl = FocusableLazyListStateImpl()
+    val focusableLazyListState: FocusableLazyListState = FocusableLazyListState()
 ) : FocusableState by focusableLazyListState {
 
     val flattenedTree = mutableStateListOf<Tree.Element<*>>()

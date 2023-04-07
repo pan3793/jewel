@@ -2,27 +2,13 @@ package org.jetbrains.jewel.themes.expui.standalone.control.lazy
 
 import org.jetbrains.jewel.themes.expui.standalone.control.lazy.SelectableKey.Selectable
 import org.jetbrains.jewel.themes.expui.standalone.control.tree.SelectableColumnOnKeyEvent
+import kotlin.math.max
+import kotlin.math.min
 
 open class DefaultSelectableOnKeyEvent(
     override val keybindings: SelectableColumnKeybindings,
     private val selectableState: SelectableLazyListState,
-    private val animate: Boolean = false,
-    private val scrollOffset: Int = 0
 ) : SelectableColumnOnKeyEvent {
-
-    fun indexOfNextSelectable(currentIndex: Int): Int? {
-        for (i in currentIndex..selectableState.keys.lastIndex) {
-            if (selectableState.keys[i] is Selectable) return i
-        }
-        return null
-    }
-
-    fun indexOfPreviousSelectable(currentIndex: Int): Int? {
-        for (i in currentIndex downTo 0) {
-            if (selectableState.keys[i] is Selectable) return i
-        }
-        return null
-    }
 
     override suspend fun onSelectFirstItem(currentIndex: Int) {
         val firstSelectable = selectableState.keys.indexOfFirst { it is Selectable }
@@ -72,16 +58,15 @@ open class DefaultSelectableOnKeyEvent(
 
     override suspend fun onExtendSelectionWithPreviousItem(currentIndex: Int) {
         if (currentIndex - 1 >= 0) {
-            val prevIndex=indexOfPreviousSelectable(currentIndex)?: return
+            val prevIndex = selectableState.indexOfPreviousSelectable(currentIndex) ?: return
 
             if (selectableState.lastKeyEventUsedMouse) {
                 selectableState.selectedItemIndexes.contains(currentIndex)
-                if(selectableState.selectedItemIndexes.contains(selectableState.keys[prevIndex])){
+                if (selectableState.selectedItemIndexes.contains(selectableState.keys[prevIndex])) {
                     selectableState.deselectSingleElement(currentIndex)
-                }else{
+                } else {
                     selectableState.addElementToSelection(prevIndex)
                 }
-
             } else {
                 selectableState.deselectAll()
                 selectableState.addElementsToSelection(
@@ -95,153 +80,75 @@ open class DefaultSelectableOnKeyEvent(
         }
     }
 
-    override suspend fun onSelectNextItem(itemIndex: Int) {
-        treeState.flattenedTree.getOrNull(itemIndex + 1)?.let {
-            treeState.selectSingleElement(it)
-            treeState.focusableLazyListState.focusItem(itemIndex + 1, animate, scrollOffset)
+    override suspend fun onSelectNextItem(currentIndex: Int) {
+        selectableState.indexOfNextSelectable(currentIndex)?.let {
+            selectableState.selectSingleItem(it)
         }
     }
 
-    override suspend fun onExtendSelectionWithNextItem(itemIndex: Int) {
-        val nextFlattenIndex = itemIndex + 1
-        if (treeState.flattenedTree.isNotEmpty() && nextFlattenIndex <= treeState.flattenedTree.lastIndex) {
-            if (treeState.lastKeyEventUsedMouse) {
-                val nextElem = treeState.flattenedTree[nextFlattenIndex]
-                val nextId = nextElem.idPath()
-
-                if (treeState.selectedElementsMap.containsKey(nextId)) {
-                    //we are are changing direction so we needs just deselect the current element
-                    treeState.selectedElementsMap.remove(treeState.flattenedTree[itemIndex].idPath())
+    override suspend fun onExtendSelectionWithNextItem(currentIndex: Int) {
+        val nextSelectableIndex = selectableState.indexOfNextSelectable(currentIndex)
+        if (nextSelectableIndex != null) {
+            if (selectableState.lastKeyEventUsedMouse) {
+                if (selectableState.selectedItemIndexes.contains(selectableState.keys[nextSelectableIndex])) {
+                    selectableState.deselectSingleElement(currentIndex)
                 } else {
-                    treeState.selectedElementsMap[nextId] = nextElem
+                    selectableState.addElementToSelection(nextSelectableIndex)
                 }
             } else {
-                treeState.deselectAll()
-                treeState.addElementsToSelection(
+                selectableState.deselectAll()
+                selectableState.deselectAll()
+                selectableState.addElementsToSelection(
                     listOf(
-                        treeState.flattenedTree[itemIndex],
-                        treeState.flattenedTree[nextFlattenIndex]
+                        currentIndex,
+                        nextSelectableIndex
                     )
                 )
-                treeState.lastKeyEventUsedMouse = true
-            }
-            treeState.focusItem(nextFlattenIndex, animate, scrollOffset)
-        }
-    }
-
-    override suspend fun onSelectParent(itemIndex: Int) {
-        treeState.flattenedTree[itemIndex].let {
-            if (it is Tree.Element.Node && treeState.isNodeOpen(it)) {
-                treeState.toggleNode(it)
-                treeState.focusableLazyListState.focusItem(itemIndex, animate, scrollOffset)
-            } else {
-                treeState.flattenedTree.getOrNull(itemIndex)?.parent?.let {
-                    treeState.selectSingleElement(it)
-                    treeState.focusableLazyListState.focusItem(treeState.flattenedTree.indexOf(it), animate, scrollOffset)
-                }
+                selectableState.lastKeyEventUsedMouse = true
             }
         }
     }
 
-    override suspend fun onExtendSelectionToParent(itemIndex: Int) {
-        treeState.flattenedTree.getOrNull(itemIndex)?.parent?.let {
-            val parentIndex = treeState.flattenedTree.indexOf(it)
-            for (index in parentIndex..itemIndex) {
-                treeState.toggleElementSelection(it)
+    override suspend fun onScrollPageUpAndSelectItem(currentIndex: Int) {
+        val visibleSize = selectableState.delegate.layoutInfo.visibleItemsInfo.size
+        val targetIndex = max(currentIndex - visibleSize, 0)
+        if (selectableState.keys[targetIndex] !is Selectable) {
+            selectableState.indexOfPreviousSelectable(currentIndex) ?: selectableState.indexOfNextSelectable(currentIndex)?.let {
+                selectableState.selectSingleItem(it)
             }
-            treeState.focusableLazyListState.focusItem(parentIndex, animate, scrollOffset)
-        }
+        } else selectableState.selectSingleItem(targetIndex)
     }
 
-    override suspend fun onSelectChild(itemIndex: Int) {
-        treeState.flattenedTree.getOrNull(itemIndex)?.let {
-            if (it is Tree.Element.Node && !treeState.isNodeOpen(it)) {
-                treeState.toggleNode(it)
-                treeState.focusableLazyListState.focusItem(itemIndex, animate, scrollOffset)
-            } else {
-                onSelectNextItem(itemIndex)
+    override suspend fun onScrollPageUpAndExtendSelection(currentIndex: Int) {
+
+        val visibleSize = selectableState.delegate.layoutInfo.visibleItemsInfo.size
+        val targetIndex = max(currentIndex - visibleSize, 0)
+        val indexList =
+            selectableState.keys.subList(targetIndex, currentIndex).withIndex().filter { it.value is Selectable }.map { it.index }.toList()
+        selectableState.toggleElementsToSelection(indexList)
+    }
+
+    override suspend fun onScrollPageDownAndSelectItem(currentIndex: Int) {
+        val firstVisible = selectableState.delegate.firstVisibleItemIndex
+        val visibleSize = selectableState.delegate.layoutInfo.visibleItemsInfo.size
+        val targetIndex = min(firstVisible + visibleSize, selectableState.keys.lastIndex)
+        if (selectableState.keys[targetIndex] !is Selectable) {
+            selectableState.indexOfNextSelectable(currentIndex) ?: selectableState.indexOfPreviousSelectable(currentIndex)?.let {
+                selectableState.selectSingleItem(it)
             }
-        }
+        } else selectableState.selectSingleItem(targetIndex)
     }
 
-    override suspend fun onExtendSelectionToChild(itemIndex: Int) {
-        val lastSelectedElementId = treeState.lastSelectedElementId.value
-        val lastSelectedIndex = treeState.lastSelectedElementId.value?.let {
-            treeState.flattenedTree.indexOf(treeState.selectedElements[it])
-        } ?: 0
-        treeState.deselectAll()
-        for (currentIndex in min(lastSelectedIndex, itemIndex)..max(lastSelectedIndex, itemIndex)) {
-            treeState.addElementToSelection(treeState.flattenedTree[currentIndex])
-        }
-        treeState.lastSelectedElementId.value = lastSelectedElementId
-        //maybe we need to save the last selected element in treeState
-        //    val lastSelectedElement= mutableStateOf<Element....
-//        val startIndex = treeState.selectedElements.lastOrNull()?.let {
-//            treeState.flattenedTree.indexOf(it)
-//        } ?: 0
-//        if (startIndex < itemIndex) {
-//            //selecting up
-//            for (i in startIndex..itemIndex) {
-//                val currentElement = treeState.flattenedTree[i]
-//                if (!treeState.selectedElements.contains(currentElement))
-//                    treeState.selectedElements.add(currentElement)
-//            }
-//        } else {
-//            for (i in startIndex downTo itemIndex) {
-//                val currentElement = treeState.flattenedTree[i]
-//                if (!treeState.selectedElements.contains(currentElement))
-//                    treeState.selectedElements.add(currentElement)
-//            }
-//        }
+    override suspend fun onScrollPageDownAndExtendSelection(currentIndex: Int) {
+        val firstVisible = selectableState.delegate.firstVisibleItemIndex
+        val visibleSize = selectableState.delegate.layoutInfo.visibleItemsInfo.size
+        val targetIndex = min(firstVisible + visibleSize, selectableState.keys.lastIndex)
+        val indexList =
+            selectableState.keys.subList(currentIndex, targetIndex).withIndex().filter { it.value is Selectable }.map { it.index }.toList()
+        selectableState.toggleElementsToSelection(indexList)
     }
 
-    override suspend fun onScrollPageUpAndSelectItem(itemIndex: Int) {
-        val visibleSize = treeState.focusableLazyListState.layoutInfo.visibleItemsInfo.size
-        val targetIndex = max(itemIndex - visibleSize, 0)
-        treeState.selectSingleElement(treeState.flattenedTree[targetIndex])
-        treeState.focusableLazyListState.focusItem(targetIndex, animate, scrollOffset)
-    }
-
-    override suspend fun onScrollPageUpAndExtendSelection(itemIndex: Int) {
-        val visibleSize = treeState.focusableLazyListState.layoutInfo.visibleItemsInfo.size
-        val targetIndex = max(itemIndex - visibleSize, 0)
-        treeState.flattenedTree.subList(targetIndex, itemIndex).forEach {
-            treeState.toggleElementSelection(it)
-        }
-        treeState.focusableLazyListState.focusItem(targetIndex, animate, scrollOffset)
-    }
-
-    override suspend fun onScrollPageDownAndSelectItem(itemIndex: Int) {
-        val firstVisible = treeState.focusableLazyListState.firstVisibleItemIndex
-        val visibleSize = treeState.focusableLazyListState.layoutInfo.visibleItemsInfo.size
-        val targetIndex = min(firstVisible + visibleSize, treeState.flattenedTree.lastIndex)
-        treeState.selectSingleElement(treeState.flattenedTree[targetIndex])
-        treeState.focusableLazyListState.focusItem(targetIndex, animate, scrollOffset)
-    }
-
-    override suspend fun onScrollPageDownAndExtendSelection(itemIndex: Int) {
-        val firstVisible = treeState.focusableLazyListState.firstVisibleItemIndex
-        val visibleSize = treeState.focusableLazyListState.layoutInfo.visibleItemsInfo.size
-        val targetIndex = min(firstVisible + visibleSize, treeState.flattenedTree.lastIndex)
-        treeState.flattenedTree.subList(itemIndex, targetIndex).forEach {
-            treeState.toggleElementSelection(it)
-        }
-        treeState.focusableLazyListState.focusItem(targetIndex, animate, scrollOffset)
-    }
-
-    override suspend fun onSelectNextSibling(itemIndex: Int) {
-        treeState.flattenedTree.listIterator(itemIndex)
-            .asSequence()
-            .firstOrNull { it.depth == treeState.flattenedTree[itemIndex].depth }
-    }
-
-    override suspend fun onSelectPreviousSibling(itemIndex: Int) {
-        treeState.flattenedTree.subList(0, itemIndex)
-            .reversed()
-            .firstOrNull { it.depth == treeState.flattenedTree[itemIndex].depth }
-    }
-
-    override suspend fun onEdit(itemIndex: Int) {
+    override suspend fun onEdit(currentIndex: Int) {
         //ij with this shortcut just focus the first element with issue
         //unavailable here
     }
